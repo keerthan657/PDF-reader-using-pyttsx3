@@ -1,9 +1,7 @@
 from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5.QtWidgets import QMessageBox
 import pyttsx3
 import PyPDF2
-
-engine = pyttsx3.init()
-
 
 # speech engine properties
 def setSpeechProp(rateValue, volumeValue, VoiceId):
@@ -31,27 +29,32 @@ def readPageAloud(nameOfPdf, pageNum):
     pageText = getPageText(nameOfPdf, pageNum)
     speak(pageText)
 
-def readPdf(nameOfPdf):
-    inputPdf = PyPDF2.PdfFileReader(open(nameOfPdf, "rb"))
+def readPdf(nameOfPdf, fromPage):
+    try:
+        try:
+            inputPdf = PyPDF2.PdfFileReader(open(nameOfPdf, "rb"))
+        except PyPDF2.utils.PdfReadError:
+            Ui_MainWindow().error("file: not a pdf")
+            return
+        # is it encrypted ?
+        isProtected = inputPdf.isEncrypted
 
-    noOfPages = inputPdf.getNumPages()
-
-    for i in range(noOfPages):
-        readPageAloud(nameOfPdf, i)
-
-def readPdfFrom(nameOfPdf, startPgNum):
-    inputPdf = PyPDF2.PdfFileReader(open(nameOfPdf, "rb"))
-
-    noOfPages = inputPdf.getNumPages()
-
-    if(startPgNum < noOfPages):
-        for i in range(startPgNum, noOfPages):
-            readPageAloud(nameOfPdf, i)
+        if(isProtected):
+            Ui_MainWindow().error('file encrypted!!')
+        else:
+            noOfPages = inputPdf.getNumPages()
+            if(fromPage > noOfPages):
+                Ui_MainWindow().error('invalid start page number')
+            else:
+                for i in range(fromPage, noOfPages):
+                    readPageAloud(nameOfPdf, i)
+    except FileNotFoundError:
+        Ui_MainWindow().error("file not found")
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
-        MainWindow.resize(554, 348)
+        MainWindow.resize(515, 340)
         self.centralwidget = QtWidgets.QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
         self.textEdit1 = QtWidgets.QTextEdit(self.centralwidget)
@@ -86,12 +89,9 @@ class Ui_MainWindow(object):
         self.label4 = QtWidgets.QLabel(self.centralwidget)
         self.label4.setGeometry(QtCore.QRect(370, 40, 71, 20))
         self.label4.setObjectName("label4")
-        self.pushButton1 = QtWidgets.QPushButton(self.centralwidget)
-        self.pushButton1.setGeometry(QtCore.QRect(210, 190, 131, 51))
-        self.pushButton1.setObjectName("pushButton1")
         MainWindow.setCentralWidget(self.centralwidget)
         self.menubar = QtWidgets.QMenuBar(MainWindow)
-        self.menubar.setGeometry(QtCore.QRect(0, 0, 554, 26))
+        self.menubar.setGeometry(QtCore.QRect(0, 0, 515, 26))
         self.menubar.setObjectName("menubar")
         MainWindow.setMenuBar(self.menubar)
         self.statusbar = QtWidgets.QStatusBar(MainWindow)
@@ -110,9 +110,15 @@ class Ui_MainWindow(object):
         self.radioButton.setText(_translate("MainWindow", "Male Voice"))
         self.label3.setText(_translate("MainWindow", "Volume"))
         self.label4.setText(_translate("MainWindow", "From Page"))
-        self.pushButton1.setText(_translate("MainWindow", "STOP"))
+
         self.pushButton.clicked.connect(self.on_click)
-        self.pushButton1.clicked.connect(self.stopFun)
+
+    def error(self, msg):
+        errorDialog = QMessageBox()
+        errorDialog.setIcon(QMessageBox.Critical)
+        errorDialog.setText(msg)
+        errorDialog.setWindowTitle("Error")
+        errorDialog.exec_()
 
     def on_click(self):
         startPgNum = self.textEdit3.toPlainText()
@@ -120,20 +126,24 @@ class Ui_MainWindow(object):
         volumeVal = self.volSlider.value() / 100.0
         pdfName = self.textEdit1.toPlainText()
 
-        if(self.radioButton.isChecked()==True):
-            voiceId=0
+        if(pdfName=='' or rateVal==''):
+            self.error("field empty")
         else:
-            voiceId=1
-        setSpeechProp(rateVal, volumeVal, voiceId)
+            if(startPgNum==''):
+                startPgNum=0
 
-        readPdfFrom(pdfName, int(startPgNum))
-    
-    def stopFun(self):
-        engine.stop()
+            if(self.radioButton.isChecked()==True):
+                voiceId=0
+            else:
+                voiceId=1
+            setSpeechProp(rateVal, volumeVal, voiceId)
+
+            readPdf(pdfName, int(startPgNum))
 
 if __name__ == "__main__":
     import sys
     app = QtWidgets.QApplication(sys.argv)
+    engine = pyttsx3.init()
     pdfReader = QtWidgets.QMainWindow()
     ui = Ui_MainWindow()
     ui.setupUi(pdfReader)
